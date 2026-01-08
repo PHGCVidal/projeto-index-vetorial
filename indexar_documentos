@@ -1,0 +1,85 @@
+
+import os
+import pandas as pd
+from langchain.docstore.document import Document
+from langchain_community.document_loaders import PyPDFLoader, UnstructuredExcelLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.vectorstores import Chroma
+
+# --- Bloco de Configuração ---
+PDFS_FOLDER_PATH = "documentos"
+VECTORDB_PATH = "base_vetorial_local"
+
+print("Iniciando processo de indexação (versão robusta)...")
+
+# --- Bloco de Carregamento de Arquivos ---
+documents = []
+for file in os.listdir(PDFS_FOLDER_PATH):
+    full_path = os.path.join(PDFS_FOLDER_PATH, file)
+
+    if file.endswith('.pdf'):
+        print(f"Processando arquivo PDF: {file}")
+        loader = PyPDFLoader(full_path)
+        documents.extend(loader.load())
+        
+    elif file.endswith('.xlsx'):
+        print(f"Processando arquivo Excel: {file}")
+        loader = UnstructuredExcelLoader(full_path, mode="elements")
+        documents.extend(loader.load())
+        
+    elif file.endswith('.csv'):
+        print(f"Processando arquivo CSV: {file}")
+        try:
+            # Mantemos a linha que sabemos que funciona para ler o arquivo
+            df = pd.read_csv(full_path, sep=';', encoding='latin-1', engine='python')
+            
+            # --- A MÁGICA ACONTECE AQUI ---
+            # Em vez de usar nomes fixos, pegamos os nomes das colunas dinamicamente.
+            # df.columns[0] é o nome da primeira coluna.
+            # df.columns[1] é o nome da segunda coluna.
+            coluna_colaborador = df.columns[0]
+            coluna_os = df.columns[1]
+            
+            print(f"Colunas detectadas: '{coluna_colaborador}' e '{coluna_os}'")
+            
+            for index, row in df.iterrows():
+                # Agora usamos as variáveis com os nomes exatos que o Pandas leu
+                nome_colaborador = row[coluna_colaborador]
+                numero_os = row[coluna_os]
+                
+                content = f"O colaborador chamado {nome_colaborador} completou um total de {numero_os} ordens de serviço."
+                
+                doc = Document(page_content=content, metadata={"source": full_path, "row": index})
+                documents.append(doc)
+
+        except Exception as e:
+            print(f"Erro ao processar o arquivo CSV {file}: {e}")
+
+print(f"\nTotal de {len(documents)} documentos/linhas carregadas.")
+
+# --- Bloco de Processamento e Salvamento ---
+if documents:
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+    chunks = text_splitter.split_documents(documents)
+
+    print(f"Conteúdo dividido em {len(chunks)} pedaços para vetorização.")
+
+    model_name = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
+    embeddings = HuggingFaceEmbeddings(model_name=model_name)
+
+    print("Modelo de embedding carregado. Iniciando a vetorização dos textos...")
+    print("(Este processo pode ser demorado, por favor aguarde...)")
+
+    vectordb = Chroma.from_documents(
+        documents=chunks,
+        embedding=embeddings,
+        persist_directory=VECTORDB_PATH
+    )
+
+    print("-" * 50)
+    print("INDEXAÇÃO CONCLUÍDA!")
+    print(f"Sua base de dados vetorial foi salva em: '{VECTORDB_PATH}'")
+    print("-" * 50)
+else:
+    print("Nenhum documento foi carregado. Verifique a pasta 'documentos' e o código.")
