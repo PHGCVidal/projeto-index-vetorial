@@ -8,16 +8,16 @@ VECTORDB_PATH = "base_vetorial_local"
 MODEL_NAME_EMBEDDING = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
 # --- FIM DAS CONFIGURAÇÕES ---
 
-# 1. Carregar o modelo de embedding
+# Carregar o modelo de embedding
 print("Carregando modelo de embedding...")
 embeddings = HuggingFaceEmbeddings(model_name=MODEL_NAME_EMBEDDING)
 
-# 2. Carregar a base de dados vetorial que já existe
+# Carregar a base de dados vetorial 
 print("Carregando base de dados vetorial local...")
 vectordb = Chroma(persist_directory=VECTORDB_PATH, embedding_function=embeddings)
 
-# 3. Criar o "buscador" (retriever)
-# k=4 significa que vamos buscar os 4 trechos mais relevantes
+# Criar o retriever
+# k=4 significa buscar os 4 trechos mais relevantes
 retriever = vectordb.as_retriever(search_kwargs={"k": 4})
 
 # --- LOOP DE PERGUNTAS ---
@@ -30,11 +30,9 @@ while True:
 
     print("\nBuscando os trechos mais relevantes...")
     
-    # 4. Executar a busca e obter os documentos (trechos)
-    # Esta é a parte que funciona no seu PC!
+    # Executar a busca e obter os documentos (trechos)
     documentos_relevantes = retriever.get_relevant_documents(sua_pergunta)
     
-    # 5. Imprimir os resultados para você copiar e colar
     print("-" * 50)
     print("TRECHOS ENCONTRADOS (Contexto para a IA):")
     print("-" * 50)
